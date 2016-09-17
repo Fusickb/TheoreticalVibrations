@@ -1,3 +1,5 @@
+//*********************************************************************************
+//Includes
 #include <i2c_t3.h> // the I2C library that replaces Wire.h for the Teensy 3.2
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BNO055.h>
@@ -6,175 +8,174 @@
 #include <FlexCAN.h>
 #include <EEPROM.h>
 
+
+//*********************************************************************************
+//Defines
+
+  //Pins
 #define PS0Pin      2
 #define resetPin    22
 #define IMUIntPin   6
 #define STPin       17
 #define ledPin      13
 
-/* This driver reads raw data from the BNO055
+  //Serial Connection
+#define SERIAL_BAUD 9600
 
-   Connections
-   ===========
-   Connect SCL to analog 5
-   Connect SDA to analog 4
-   Connect VDD to 3.3V DC
-   Connect GROUND to common ground
+  //CAN Bus
+#define CAN_BAUD    250000
 
-   History
-   =======
-   2015/MAR/03  - First release (KTOWN)
-*/
+  //Teensy ID
+#define CAN_ID0     0x701
 
+
+//*********************************************************************************
+//Instantiations
 /* Set the delay between fresh samples */
 elapsedMillis canTimer;
-elapsedMillis SerialOutputTimer;
-elapsedMillis ledTimer;
-elapsedMillis timer;
-
-int8_t xhigh = 0;
-int8_t xlow = 0;
-int8_t whole = 0;
-int8_t decimal = 0;
-int8_t something = 0;
-int8_t somethingMore = 0;
-double actual = 0;
-
-boolean ledState = false;
 
 FlexCAN CANbus(250000);
 static CAN_message_t txCANmsg,rxCANmsg;
 
+  //Make Accelerometer Object
 Adafruit_BNO055 bno = Adafruit_BNO055();
 
-/**************************************************************************/
-/*
-    Arduino setup function (automatically called at startup)
-*/
-/**************************************************************************/
+//LED Blinking
+int msgCounter = 0;     //Counts the number of messages sent
+int msgRollover = 50;  //msgCounter resets to 1 after when greater than this
+boolean ledState = false; //this will toggle on every rollover
+
+
+//*********************************************************************************
+//Setup
 void setup(void)
 {
-   CANbus.begin();
+  //Setup CAN Bus
+  CANbus.begin();
 
-   pinMode(ledPin, OUTPUT);
- 
+  //Setup pins
+  pinMode(ledPin, OUTPUT);
   pinMode(PS0Pin,OUTPUT);
   digitalWrite(PS0Pin,LOW);
   pinMode(resetPin,OUTPUT);
   digitalWrite(resetPin,LOW);
   pinMode(STPin,OUTPUT);
   digitalWrite(STPin,LOW);
-
-  
   pinMode(IMUIntPin,INPUT);
-  
   delay(20);
   digitalWrite(resetPin,HIGH);
+
+  //Setup Serial
   Serial.begin(115200);
   delay(1000);
-  
-  Serial.println("Orientation Sensor Raw Data Test"); Serial.println("");
 
-  /* Initialise the sensor */
-  if(!bno.begin())
-  {
-    /* There was a problem detecting the BNO055 ... check your connections */
-    Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
-    while(1);
-  }
-
+  //Initialize the sensor
+  bno.begin();
   delay(1000);
-
-  /* Display the current temperature */
-  int8_t temp = bno.getTemp();
-  Serial.print("Current Temperature: ");
-  Serial.print(temp);
-  Serial.println(" C");
-  Serial.println("");
-
   bno.setExtCrystalUse(true);
 
-  Serial.println("Calibration status values: 0=uncalibrated, 3=fully calibrated");
-
-  
 }
 
-/**************************************************************************/
-/*
-    Arduino loop function, called once 'setup' is complete (your own code
-    should go here)
-*/
-/**************************************************************************/
+
+//*********************************************************************************
+//Main
 void loop(void)
 {
-    imu::Vector<3> acceleration = bno.getVector(Adafruit_BNO055::VECTOR_ACCELEROMETER);
-    imu::Vector<3> angularVelocity = bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);
+  if ( canTimer >= 10){  //broadcasts messages every 10ms or 100Hz frequency
+    canTimer = 0;              //Zero the timer
 
- /* if ( canTimer >= 10){  //broadcasts messages every 10ms or 100Hz frequency
-    canTimer = 0;
-    txCANmsg.id=0x700;         //Sets ID
+    //Use Rake's custom functions to read the raw, unscaled register values
+      //These will have to be scaled after they are imported
+    imu::Vector<3> acceleration = bno.getShort(Adafruit_BNO055::VECTOR_ACCELEROMETER);
+    imu::Vector<3> angularVelocity = bno.getShort(Adafruit_BNO055::VECTOR_GYROSCOPE);
+
+    int8_t accelXLSB = (int8_t)((int16_t)acceleration.x());     //acceleration x lsb  
+    int8_t accelXMSB = (int8_t)((int16_t)acceleration.x()>>8);  //acceleration x msb
+    int8_t accelYLSB = (int8_t)((int16_t)acceleration.y());     //acceleration y lsb
+    int8_t accelYMSB = (int8_t)((int16_t)acceleration.y()>>8);  //acceleration y msb                               
+    int8_t accelZLSB = (int8_t)((int16_t)acceleration.z());     //acceleration z lsb              
+    int8_t accelZMSB = (int8_t)((int16_t)acceleration.z()>>8);  //accelertion z msb            
+    int8_t angVelXLSB = (int8_t)((int16_t)angularVelocity.x());  //angular velocity x lsb             
+    int8_t angVelXMSB = (int8_t)((int16_t)angularVelocity.x());  //angular velocity x msb   
+
+    Serial.print(acceleration.x(),HEX);
+    Serial.print(accelXLSB,HEX);
+    Serial.print(accelXMSB,HEX);
+
+    //Frame 0
+    txCANmsg.id=CAN_ID0;         //Sets ID
     txCANmsg.len=8;            //Sets Length
     txCANmsg.ext=1;
-
-    actual = acceleration.x();
-    Serial.println(actual);
     
-    txCANmsg.buf[0]= getDecimalNumber(actual);     //Sets each byte to a value   //dec num accelX  
-    txCANmsg.buf[1]= getWholeNumber(actual);                                   //whole num accelX
-    txCANmsg.buf[2]= getDecimalNumber(acceleration.y());                                   //dec num accelY
-    txCANmsg.buf[3]= getWholeNumber(acceleration.y());                                   //whole num accelY
-    txCANmsg.buf[4]= getDecimalNumber(acceleration.z());                                   //dec num accelZ
-    txCANmsg.buf[5]= getWholeNumber(acceleration.z());                                   //whole num accelZ
-    txCANmsg.buf[6]= getDecimalNumber(angularVelocity.x());                                   //dec num angularVelX
-    txCANmsg.buf[7]= getWholeNumber(angularVelocity.x());                                   //whole num angularVelX
+    txCANmsg.buf[0]= (int8_t)((int16_t)acceleration.x());     //acceleration x lsb  
+    txCANmsg.buf[1]= (int8_t)((int16_t)acceleration.x()>>8);  //acceleration x msb
+    txCANmsg.buf[2]= (int8_t)((int16_t)acceleration.y());     //acceleration y lsb
+    txCANmsg.buf[3]= (int8_t)((int16_t)acceleration.y()>>8);  //acceleration y msb                               
+    txCANmsg.buf[4]= (int8_t)((int16_t)acceleration.z());     //acceleration z lsb              
+    txCANmsg.buf[5]= (int8_t)((int16_t)acceleration.z()>>8);  //accelertion z msb            
+    txCANmsg.buf[6]= (int8_t)((int16_t)angularVelocity.x());  //angular velocity x lsb             
+    txCANmsg.buf[7]= (int8_t)((int16_t)angularVelocity.x());  //angular velocity x msb                                 
 
-    CANbus.write(txCANmsg);  //Writes message to bus
+    if(CANbus.write(txCANmsg)){  //Writes message to bus
+      msgCounter++; //increment the message counter
+      
+      if(msgCounter>msgRollover){ //If counter is high enough
+        msgCounter=1;             //rollover
+        ledState = !ledState;     //Toggle LED
+        digitalWrite(ledPin,ledState);
+        }
+    }
   } //end if*/
 
-  while (CANbus.read(rxCANmsg)){   //reads CAN bus
-    uint32_t ID = rxCANmsg.id;  //32 unsigned integer that contains ID of the received message
-    byte DLC = rxCANmsg.len;    // byte that stores the length of received message
+//  while (CANbus.read(rxCANmsg)){   //reads CAN bus
+//    uint32_t ID = rxCANmsg.id;  //32 unsigned integer that contains ID of the received message
+//    byte DLC = rxCANmsg.len;    // byte that stores the length of received message
+//
+//    
+//    if ( ID == 0x18FEF100 || ID ==0x700) { //if the ID has FEF1 in byte 1 and byte 2
+//      Serial.print("\n");
+//      Serial.print(ID,HEX);                //print the ID in hex
+//      Serial.print(" ");
+//      Serial.print(DLC,HEX);               //print the length in hex
+//      for (int i = 0; i < DLC; i++){
+//        Serial.print(" ");
+//        Serial.print(rxCANmsg.buf[i],HEX);  //print each component in hex
+//      } //end for
+//    } //end if
+//
+//    if(ID ==0x700){
+//      something = rxCANmsg.buf[1];
+//      somethingMore = rxCANmsg.buf[0];
+//      Serial.print(something);
+//      Serial.print(".");
+//      Serial.print(somethingMore);
+//      
+//    }
+//    
+//  } //end while
 
-    
-    if ( ID == 0x18FEF100 || ID ==0x700) { //if the ID has FEF1 in byte 1 and byte 2
-      Serial.print("\n");
-      Serial.print(ID,HEX);                //print the ID in hex
-      Serial.print(" ");
-      Serial.print(DLC,HEX);               //print the length in hex
-      for (int i = 0; i < DLC; i++){
-        Serial.print(" ");
-        Serial.print(rxCANmsg.buf[i],HEX);  //print each component in hex
-      } //end for
-    } //end if
+} //End (Main) Loop
 
-    if(ID ==0x700){
-      something = rxCANmsg.buf[1];
-      somethingMore = rxCANmsg.buf[0];
-      Serial.print(something);
-      Serial.print(".");
-      Serial.print(somethingMore);
-      
-    }
-  } //end while
-}
 
- int8_t getWholeNumber(double data){ //gets whole number portion of data
-    whole = data;
-    return whole;
-  }
-
-  int8_t getDecimalNumber(double data){ //gets decimal portion of number and rounds it
-    if(data >= 0){
-      decimal = (data-whole)*100 + 0.5; //adding 0.5 to 7.5 makes it 8, and 0.3 + 0.5 = 0.8 which knocks off the decimal point
-      }
-     else{
-      decimal = (data-whole)*100 - 0.5; //-7.5 subtracting makes it -8
-     }
-    return decimal;
-  }
-
-  double getActualValue(int8_t whole, int8_t decimal){ //gets the actual value of the split whole and decimal parts for checking
-    actual = whole+(decimal/100.);
-    return actual;
-  }
+//*********************************************************************************
+//Old Functions
+// int8_t getWholeNumber(double data){ //gets whole number portion of data
+//    whole = data;
+//    return whole;
+//  }
+//
+//  int8_t getDecimalNumber(double data){ //gets decimal portion of number and rounds it
+//    if(data >= 0){
+//      decimal = (data-whole)*100 + 0.5; //adding 0.5 to 7.5 makes it 8, and 0.3 + 0.5 = 0.8 which knocks off the decimal point
+//      }
+//     else{
+//      decimal = (data-whole)*100 - 0.5; //-7.5 subtracting makes it -8
+//     }
+//    return decimal;
+//  }
+//
+//  double getActualValue(int8_t whole, int8_t decimal){ //gets the actual value of the split whole and decimal parts for checking
+//    actual = whole+(decimal/100.);
+//    return actual;
+//  }
 
