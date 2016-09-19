@@ -21,9 +21,9 @@ int16_t eulerAngleY = 0;
 int16_t eulerAngleZ = 0;
 
 int accelerationResolution = 100;                                       // These resolutions are used to convert the above variables to actual values (from the data sheet)
-int angVelocityResolution;
-int linearAccelResolution;
-int eulerAngleResolution;
+int angVelocityResolution = 1;
+int linearAccelResolution = 1;
+int eulerAngleResolution = 1;
 
 boolean ledState = false;                                               // Sets a boolean variable to false (light is off)
 
@@ -64,9 +64,9 @@ void loop() {
      Serial.print(" ");
      accelerationX = (accelerationX | rxmsg.buf[1]) << 8; // stores most significant byte
      accelerationX = accelerationX | rxmsg.buf[0]; //stores least significant byte
-     accelerationX /= acclerationResolution;  //resolves the actual value by dividing by the resolution
+     accelerationX /= accelerationResolution;  //resolves the actual value by dividing by the resolution
      Serial.print("AccelX: ");
-     Serial.print(acclerationX); 
+     Serial.print(accelerationX); 
      Serial.print(" ");
 
      accelerationY = (accelerationY | rxmsg.buf[3]) << 8;
@@ -78,7 +78,7 @@ void loop() {
 
      accelerationZ = (accelerationZ | rxmsg.buf[5]) << 8;
      accelerationZ = accelerationZ | rxmsg.buf[4];
-     accelerationZ /= acclerationResolution;
+     accelerationZ /= accelerationResolution;
      Serial.print("AccelZ: ");
      Serial.print(accelerationZ);
      Serial.print(" ");
