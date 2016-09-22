@@ -7,51 +7,49 @@
 
 #include <FlexCAN.h>
 
-FlexCAN CANbus(5000000);
-static CAN_message_t txmsg,rxmsg;
+#define analogPin   20
+#define ledPin      13
 
+FlexCAN CANbus(250000);
+static CAN_message_t txmsg;
 
-uint32_t currentMillis = 0;                                             // Declares an unsigned 32 bit integer type called 'currentMillis' and sets it to a value of 0. 
-uint32_t previousMillis10 = 0;                                          // Declares an unsigned 32 bit integer type called 'currentMillis' and sets it to a value of 0.
+elapsedMillis canTimer;
 
-elapsedMillis timer;
+int16_t stringPot = 0;
+int8_t stringPotLSB = 0;
+int8_t stringPotMSB = 0;
 
-int analogPin = 3;
-float StringPot = 0;
-
-
-
-int8_t IntegerValue = 0;
-int8_t DecimalValue = 0;
-
+boolean ledState = false;
 
 void setup() {
   // put your setup code here, to run once:
   
-  CAN.begin ();
+  CANbus.begin ();
 
 }
 
 
 void loop() {
   // put your main code here, to run repeatedly:
-
-  StringPot = analogRead(analogPin);
-
-  IntegerValue = StringPot;
-  DecimalValue = (StringPot - IntegerValue) * 100
   
+  if (canTimer >= 10){ 
+    stringPot = analogRead(analogPin);
+    stringPotLSB = stringPot; //stores last 8 bits when casting 16 bit int to 8 bit int
+    stringPotMSB = stringPot >> 8; //shifts 8 bits and stores the first 8 bits
+    
+    canTimer = 0;
+    txmsg.id = 0x788;                                                    // Create a sendable message with the CAN id 0x788, Front String Pot
+    txmsg.len = 2;                                                       // that has a length of 2 bytes,
+    txmsg.ext = 1;                                                       // that also has an extension (?) of 1.
 
+    txmsg.buf[0] = stringPotLSB;
+    txmsg.buf[1] = stringPotMSB;
 
-  (timer >= 10){ 
-   timer = 0;
-   txmsg.id = 0x788;                                                    // Create a sendable message with the CAN id 0x788, Front String Pot
-   txmsg.len = 2;                                                       // that has a length of 2 bytes,
-   txmsg.ext = 1;                                                       // that also has an extension (?) of 1.
-   txmsg.buf[0]= IntegerValue;                                          // Make this message's 1st part be Integer Value,
-   txmsg.buf[1] = DecimalValue;                                         // 2nd part be Decimal Value,
+    ledState = !ledState;
+    digitalWrite(ledPin,ledState);
+    
    
-   CAN.write(txmsg);                                                    // Send this message out on the CAN bus.
+    CANbus.write(txmsg);                                                    // Send this message out on the CAN bus.
 
   }
 
