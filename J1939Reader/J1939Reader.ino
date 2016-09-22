@@ -20,7 +20,7 @@ int16_t eulerAngleX = 0;
 int16_t eulerAngleY = 0;
 int16_t eulerAngleZ = 0;
 
-int accelerationResolution = 100;                                       // These resolutions are used to convert the above variables to actual values (from the data sheet)
+float accelerationResolution = 100.0;                                       // These resolutions are used to convert the above variables to actual values (from the data sheet)
 int angVelocityResolution = 1;
 int linearAccelResolution = 1;
 int eulerAngleResolution = 1;
@@ -49,7 +49,7 @@ void loop() {
     digitalWrite(ledPin,ledState);                                      // Write that change to the pin
    }
        
-   if ( ID > 0x700 && ID < 0x724 ){                                     // if the ID of the message is 701 to 723
+   if (/* ID > 0x700 && ID < 0x724*/ ID ==0x701 ){                                     // if the ID of the message is 701 to 723
      Serial.print(ID,HEX);                                              // print the ID in HEX,
      Serial.print(" ");                                                 // print a space,
      Serial.print(DLC,HEX);                                             // print the length of the message in HEX,
@@ -60,10 +60,14 @@ void loop() {
 
 //nested if statements only run if the ID is in the range from the above if statement, and prints results based on ID number
  
-     if (ID == 0x701 || ID == 0x704 || ID == 0x707 || ID == 0x710 || ID == 0x713 || ID == 0x716 || ID == 0x719){ //these IDs will store accelerationX,Y,Z, and linearVelocityX. This will print the values.
+/*     if (ID == 0x701 || ID == 0x704 || ID == 0x707 || ID == 0x710 || ID == 0x713 || ID == 0x716 || ID == 0x719){ //these IDs will store accelerationX,Y,Z, and linearVelocityX. This will print the values.
      Serial.print(" ");
      accelerationX = (accelerationX | rxmsg.buf[1]) << 8; // stores most significant byte
+     Serial.print(accelerationX);
+     Serial.print(" ");
      accelerationX = accelerationX | rxmsg.buf[0]; //stores least significant byte
+     Serial.print(accelerationX);
+     Serial.print(" ");
      accelerationX /= accelerationResolution;  //resolves the actual value by dividing by the resolution
      Serial.print("AccelX: ");
      Serial.print(accelerationX); 
@@ -151,7 +155,7 @@ void loop() {
      Serial.print("EulerAngleZ: ");
      Serial.print(eulerAngleZ);
      Serial.print(" ");
-     } //end else if
+     } //end else if */
      
      Serial.println();                                                  // Print a new line.
      
