@@ -19,8 +19,8 @@
   #define SERIAL_BAUD         9600
 
   //CAN
-  #define id0                 0x788
-  #define CAN_BAUD            250000
+  #define id0                 0x800
+  #define CAN_BAUD            1000000
 
 
 //**********************************************************************
@@ -73,7 +73,7 @@ void loop(){
     stringPotLSB = stringPot; //stores last 8 bits when casting 16 bit int to 8 bit int
     stringPotMSB = stringPot >> 8; //shifts 8 bits and stores the first 8 bits
 
-    //DEBUG: serial printing
+    ////DEBUG: serial printing
     //Serial.print(stringPot);
     //  Serial.print("\t");
     //Serial.print(stringPotLSB,HEX);
